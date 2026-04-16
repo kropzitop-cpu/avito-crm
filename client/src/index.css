@@ -1,0 +1,152 @@
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@400,500,700,800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Dark palette inspired by reference: deep navy-black + violet accent */
+    --background: 228 20% 7%;
+    --foreground: 220 15% 90%;
+
+    --card: 228 18% 10%;
+    --card-foreground: 220 15% 90%;
+
+    --popover: 228 20% 9%;
+    --popover-foreground: 220 15% 90%;
+
+    --primary: 252 85% 70%;
+    --primary-foreground: 252 30% 10%;
+
+    --secondary: 228 18% 15%;
+    --secondary-foreground: 220 15% 80%;
+
+    --muted: 228 15% 14%;
+    --muted-foreground: 220 12% 55%;
+
+    --accent: 186 80% 55%;
+    --accent-foreground: 186 60% 10%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 228 16% 18%;
+    --input: 228 16% 16%;
+    --ring: 252 85% 70%;
+
+    --radius: 0.625rem;
+
+    /* Custom tokens */
+    --color-violet: #7c6bff;
+    --color-violet-soft: #a78bfa;
+    --color-cyan: #22d3ee;
+    --color-orange: #fb923c;
+    --color-green: #4ade80;
+    --color-yellow: #fbbf24;
+    --color-bg-deep: #0d0f1a;
+    --color-surface: #131520;
+    --color-surface-2: #191c2a;
+    --color-border: #252840;
+
+    --sidebar-background: 228 22% 8%;
+    --sidebar-foreground: 220 15% 75%;
+    --sidebar-primary: 252 85% 70%;
+    --sidebar-primary-foreground: 252 30% 10%;
+    --sidebar-accent: 228 18% 14%;
+    --sidebar-accent-foreground: 220 15% 85%;
+    --sidebar-border: 228 16% 16%;
+    --sidebar-ring: 252 85% 70%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Satoshi', 'Inter', sans-serif;
+    background-color: var(--color-bg-deep);
+    min-height: 100dvh;
+  }
+  h1, h2, h3, h4, h5 {
+    font-family: 'Cabinet Grotesk', 'Satoshi', sans-serif;
+    font-weight: 700;
+  }
+}
+
+/* ── Glow effects ─────────────────────────────────────────────────────────── */
+.glow-violet {
+  box-shadow: 0 0 20px rgba(124, 107, 255, 0.15);
+}
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+}
+
+/* ── Custom scrollbar ────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-violet); }
+
+/* ── Stat cards ─────────────────────────────────────────────────────────── */
+.stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover {
+  border-color: rgba(124, 107, 255, 0.4);
+  box-shadow: 0 0 24px rgba(124, 107, 255, 0.1);
+}
+
+/* ── Client cards ────────────────────────────────────────────────────────── */
+.client-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  transition: border-color 0.2s, transform 0.15s;
+  cursor: pointer;
+}
+.client-card:hover {
+  border-color: rgba(124, 107, 255, 0.5);
+  transform: translateY(-2px);
+}
+
+/* ── Badge status ────────────────────────────────────────────────────────── */
+.badge-active   { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+.badge-paused   { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+.badge-finished { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); }
+
+/* ── Material card ───────────────────────────────────────────────────────── */
+.material-card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  transition: border-color 0.2s;
+}
+.material-card:hover { border-color: rgba(124, 107, 255, 0.4); }
+
+/* ── Priority badges ─────────────────────────────────────────────────────── */
+.priority-high   { color: #f87171; }
+.priority-medium { color: #fbbf24; }
+.priority-low    { color: #4ade80; }
+
+/* ── Avatar color ring ───────────────────────────────────────────────────── */
+.avatar-ring { box-shadow: 0 0 0 2px var(--color-bg-deep), 0 0 0 4px currentColor; }
+
+/* ── Animated gradient header ────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #7c6bff 0%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Sidebar active item ─────────────────────────────────────────────────── */
+.nav-item-active {
+  background: rgba(124, 107, 255, 0.15);
+  color: #a78bfa;
+  border-left: 3px solid #7c6bff;
+}
