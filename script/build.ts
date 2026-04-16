@@ -36,40 +36,35 @@ async function buildAll() {
   console.log("building client...");
   await viteBuild();
 
-  // Inline all JS/CSS into index.html so it works inside Perplexity CSP-restricted iframe
+  // Fix index.html for Railway: remove type="module" and crossorigin (breaks some environments)
+  // Move script tags to end of body so React can find #root
   const distDir = "dist/public";
   const htmlPath = `${distDir}/index.html`;
   let html = await readFile(htmlPath, "utf-8");
-  // Find and inline JS files
-  const jsMatch = html.match(/src="(\.\/assets\/[^"]+\.js)"/);
-  if (jsMatch) {
-    const jsContent = (await readFile(`${distDir}/${jsMatch[1].replace('./', '')}`, "utf-8"))
-      // Escape </script> inside JS to prevent early tag closing
-      .replace(/<\/script>/gi, '<\/script>');
-    // Replace first script src tag with inlined content, remove all others
-    html = html.replace(/<script[^>]+src="[^"]+"[^>]*><\/script>/, `<script>${jsContent}<\/script>`);
-    // Remove any remaining external script tags (duplicates from vite)
-    html = html.replace(/<script[^>]+src="[^"]+"[^>]*><\/script>/g, "");
-  }
-  // Find and inline CSS files
-  const cssMatch = html.match(/href="(\.\/assets\/[^"]+\.css)"/);
-  if (cssMatch) {
-    const cssContent = await readFile(`${distDir}/${cssMatch[1].replace('./', '')}`, "utf-8");
-    html = html.replace(/<link[^>]+rel="stylesheet"[^>]*href="[^"]+"[^>]*>/, `<style>${cssContent}<\/style>`);
-  }
-  // Remove remaining type="module" and crossorigin attrs
+
+  // Remove type="module" and crossorigin attributes
   html = html.replace(/ type="module"/g, "").replace(/ crossorigin/g, "");
 
-  // Move all <script>...</script> blocks from <head> to end of <body>
-  const scriptBlocks: string[] = [];
-  html = html.replace(/<script>([\/\s\S]*?)<\/script>/g, (match) => {
-    scriptBlocks.push(match);
-    return "";
-  });
-  html = html.replace("</body>", scriptBlocks.join("\n") + "\n</body>");
+  // Move all <script ...> tags from <head> to end of <body>
+  const scriptTagsInHead: string[] = [];
+  // Extract script tags that are in head (before <body>)
+  const bodyIdx = html.indexOf('<body>');
+  if (bodyIdx > -1) {
+    let head = html.substring(0, bodyIdx);
+    const body = html.substring(bodyIdx);
+    head = head.replace(/<script[^>]*src="[^"]+"[^>]*><\/script>/g, (match) => {
+      scriptTagsInHead.push(match);
+      return '';
+    });
+    if (scriptTagsInHead.length > 0) {
+      html = head + body.replace('</body>', scriptTagsInHead.join('\n') + '\n</body>');
+    } else {
+      html = head + body;
+    }
+  }
 
   await writeFile(htmlPath, html, "utf-8");
-  console.log("patched index.html (inlined JS/CSS for iframe CSP compatibility)");
+  console.log("patched index.html (moved scripts to body, removed type=module)");
 
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
