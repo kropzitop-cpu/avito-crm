@@ -270,8 +270,8 @@ function MaterialForm({ clientId, onClose, existing, folders, defaultCategory, d
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs font-medium mb-1 block" style={{ color: "#94a3b8" }}>Название *</label>
-          <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Продающий заголовок" className="bg-transparent border-border" />
+          <label className="text-xs font-medium mb-1 block" style={{ color: "#94a3b8" }}>Название {form.category === "link" ? "(необяз.)" : "*"}</label>
+          <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder={form.category === "link" ? "Название ссылки..." : "Продающий заголовок"} className="bg-transparent border-border" />
         </div>
         <div>
           <label className="text-xs font-medium mb-1 block" style={{ color: "#94a3b8" }}>Категория</label>
@@ -322,14 +322,25 @@ function MaterialForm({ clientId, onClose, existing, folders, defaultCategory, d
       </div>
 
       <div>
-        <label className="text-xs font-medium mb-1 block" style={{ color: "#94a3b8" }}>Содержимое / URL</label>
-        <Textarea
-          value={form.content}
-          onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-          placeholder={form.category === "text" ? "Текст объявления, скрипт, описание..." : "URL или описание..."}
-          rows={4}
-          className="bg-transparent border-border resize-none"
-        />
+        <label className="text-xs font-medium mb-1 block" style={{ color: "#94a3b8" }}>
+          {form.category === "link" ? "URL ссылки *" : "Содержимое"}
+        </label>
+        {form.category === "link" ? (
+          <Input
+            value={form.content}
+            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+            placeholder="https://..."
+            className="bg-transparent border-border"
+          />
+        ) : (
+          <Textarea
+            value={form.content}
+            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+            placeholder={form.category === "text" ? "Текст объявления, скрипт, описание..." : "URL или описание..."}
+            rows={4}
+            className="bg-transparent border-border resize-none"
+          />
+        )}
       </div>
       <div>
         <label className="text-xs font-medium mb-1 block" style={{ color: "#94a3b8" }}>Теги</label>
@@ -1542,13 +1553,33 @@ export default function ClientDetail() {
                                   style={{ background: `linear-gradient(transparent, ${catColor[cat] || "#7c6bff"}15)` }} />
                               </div>
                             ) : cat === "link" && m.content ? (
-                              <div className="flex-1 flex flex-col items-center justify-center gap-2">
-                                <a href={m.content.startsWith("http") ? m.content : `https://${m.content}`} target="_blank" rel="noopener noreferrer"
-                                  onClick={e => e.stopPropagation()}
-                                  style={{ color: catColor[cat] || "#22d3ee", transform: "scale(2)", display: "flex" }}
-                                  title={m.content}
-                                >{catIcon(cat)}</a>
-                              </div>
+                              <a
+                                href={m.content.startsWith("http") ? m.content : `https://${m.content}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="flex-1 flex flex-col items-start justify-between p-3 gap-2 hover:opacity-80 transition-opacity"
+                                title={m.content}
+                              >
+                                {/* favicon + domain */}
+                                <div className="flex items-center gap-2 w-full">
+                                  <img
+                                    src={`https://www.google.com/s2/favicons?domain=${(() => { try { return new URL(m.content.startsWith("http") ? m.content : `https://${m.content}`).hostname; } catch { return m.content; } })()}&sz=32`}
+                                    alt=""
+                                    className="w-5 h-5 rounded shrink-0"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                  <span className="text-xs truncate font-medium" style={{ color: "#22d3ee" }}>
+                                    {(() => { try { return new URL(m.content.startsWith("http") ? m.content : `https://${m.content}`).hostname.replace("www.",""); } catch { return m.content.substring(0,30); } })()}
+                                  </span>
+                                </div>
+                                {/* URL preview */}
+                                <span className="text-xs w-full truncate" style={{ color: "#475569" }}>{m.content.substring(0, 60)}</span>
+                                {/* click hint */}
+                                <div className="flex items-center gap-1 text-xs" style={{ color: "#22d3ee" }}>
+                                  <ExternalLink size={10} /> Открыть
+                                </div>
+                              </a>
                             ) : (
                               <div className="flex-1 flex items-center justify-center">
                                 <span style={{ color: catColor[cat] || "#7c6bff", transform: "scale(2)" }}>{catIcon(cat)}</span>
