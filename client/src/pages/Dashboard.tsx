@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Users, Wallet, Bell, TrendingUp, ChevronRight, Clock, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import type { Reminder, Client } from "@shared/schema";
@@ -71,10 +72,28 @@ export default function Dashboard() {
   const { data: clients = [] } = useQuery<Client[]>({ queryKey: ["/api/clients"] });
   const { data: reminders = [] } = useQuery<Reminder[]>({ queryKey: ["/api/reminders"] });
 
-  const upcoming = reminders
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+  const tomorrowEnd = new Date(todayEnd); tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+
+  const allPending = reminders
     .filter(r => !r.isDone)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 6);
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
+  const todayTasks = allPending.filter(r => new Date(r.dueDate) <= todayEnd);
+  const tomorrowTasks = allPending.filter(r => {
+    const d = new Date(r.dueDate);
+    return d > todayEnd && d <= tomorrowEnd;
+  });
+
+  // Show today's tasks; if fewer than 3, also show tomorrow's (up to 6 total)
+  const upcoming: Array<{ task: Reminder; label: string }> = [
+    ...todayTasks.map(r => ({ task: r, label: "today" })),
+    ...(todayTasks.length < 3 ? tomorrowTasks.map(r => ({ task: r, label: "tomorrow" })) : []),
+  ].slice(0, 6);
+
+  const [showAll, setShowAll] = useState(false);
+  const visibleTasks = showAll ? allPending.map(r => ({ task: r, label: "" })) : upcoming;
 
   const recentClients = clients.slice(0, 5);
 
@@ -120,22 +139,48 @@ export default function Dashboard() {
               <Clock size={16} className="inline mr-2 text-violet-400" />
               Ближайшие задачи
             </h2>
-            <Link href="/reminders">
-              <span className="text-xs flex items-center gap-1 cursor-pointer" style={{ color: "#7c6bff" }}>
-                Все <ChevronRight size={12} />
-              </span>
-            </Link>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowAll(v => !v)}
+                className="text-xs px-2.5 py-1 rounded-lg transition-colors"
+                style={{
+                  background: showAll ? "rgba(124,107,255,0.2)" : "transparent",
+                  color: showAll ? "#a78bfa" : "#64748b",
+                  border: `1px solid ${showAll ? "rgba(124,107,255,0.4)" : "transparent"}`,
+                }}
+              >
+                {showAll ? "Свернуть" : "Все"}
+              </button>
+              <Link href="/reminders">
+                <span className="text-xs flex items-center gap-1 cursor-pointer" style={{ color: "#7c6bff" }}>
+                  Раздел <ChevronRight size={12} />
+                </span>
+              </Link>
+            </div>
           </div>
-          {upcoming.length === 0 ? (
+          {visibleTasks.length === 0 ? (
             <div
               className="rounded-xl p-8 text-center text-sm"
               style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "#475569" }}
             >
-              Нет активных напоминаний
+              Нет активных задач на сегодня
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {upcoming.map(r => <ReminderRow key={r.id} r={r} />)}
+              {visibleTasks.map(({ task: r, label }, idx) => {
+                const prevLabel = idx > 0 ? visibleTasks[idx - 1].label : null;
+                const showDivider = !showAll && label !== "" && label !== prevLabel;
+                return (
+                  <div key={r.id}>
+                    {showDivider && (
+                      <div className="text-xs font-semibold px-1 pb-1" style={{ color: "#475569", marginTop: idx > 0 ? 8 : 0 }}>
+                        {label === "today" ? "Сегодня" : "Завтра"}
+                      </div>
+                    )}
+                    <ReminderRow r={r} />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
