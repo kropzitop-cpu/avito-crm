@@ -167,60 +167,50 @@ function NotePanel({
   onSave: (data: Partial<Note>) => void;
   onDelete: () => void;
 }) {
-  const [title, setTitle] = useState(note?.title || "");
-  const [content, setContent] = useState(note?.content || "");
-  const [color, setColor] = useState(note?.color || "#1e2235");
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [color, setColor] = useState("#1e2235");
   const [tagInput, setTagInput] = useState("");
-  const [tags, setTags] = useState<string[]>(note ? parseTags(note.tags) : []);
-  const [dirty, setDirty] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
 
-  // Refs для автосохранения при смене заметки
-  const dirtyRef = useRef(false);
-  const saveRef = useRef<() => void>(() => {});
+  // Текущие данные в ref — для автосохранения без stale closure
+  const dataRef = useRef({ title: "", content: "", color: "#1e2235", tags: [] as string[] });
+  const prevNoteIdRef = useRef<number | null>(null);
 
+  // Синхронизируем ref при каждом изменении
+  useEffect(() => { dataRef.current = { title, content, color, tags }; }, [title, content, color, tags]);
+
+  // При смене заметки — сохраняем предыдущую, загружаем новую
   useEffect(() => {
-    dirtyRef.current = dirty;
-  }, [dirty]);
-
-  useEffect(() => {
-    saveRef.current = () => {
-      if (dirtyRef.current) {
-        onSave({ title, content, color, tags: JSON.stringify(tags) });
-      }
-    };
-  }, [title, content, color, tags, onSave]);
-
-  useEffect(() => {
-    if (note) {
-      // Автосохраняем предыдущую заметку перед сменой
-      saveRef.current();
-      setTitle(note.title);
-      setContent(note.content || "");
-      setColor(note.color);
-      setTags(parseTags(note.tags));
-      setTagInput("");
-      setDirty(false);
-      dirtyRef.current = false;
+    if (!note) return;
+    // Сохраняем предыдущую если была
+    if (prevNoteIdRef.current !== null && prevNoteIdRef.current !== note.id) {
+      const d = dataRef.current;
+      onSave({ title: d.title, content: d.content, color: d.color, tags: JSON.stringify(d.tags) });
     }
+    prevNoteIdRef.current = note.id;
+    // Загружаем новую
+    setTitle(note.title || "");
+    setContent(note.content || "");
+    setColor(note.color || "#1e2235");
+    setTags(parseTags(note.tags));
+    setTagInput("");
   }, [note?.id]);
 
   const addTag = () => {
     const t = tagInput.trim().replace(/^#/, "");
     if (t && !tags.includes(t)) {
       setTags([...tags, t]);
-      setDirty(true);
     }
     setTagInput("");
   };
 
   const removeTag = (t: string) => {
     setTags(tags.filter((x) => x !== t));
-    setDirty(true);
   };
 
   const handleSave = () => {
     onSave({ title, content, color, tags: JSON.stringify(tags) });
-    setDirty(false);
   };
 
   if (!note) return null;
@@ -240,11 +230,9 @@ function NotePanel({
           <span className="font-semibold text-sm" style={{ color: "#e2e8f0" }}>Редактирование</span>
         </div>
         <div className="flex gap-2">
-          {dirty && (
-            <Button size="sm" onClick={handleSave} className="h-7 px-3 text-xs" style={{ background: "#7c6bff", color: "#fff" }}>
-              <Check size={12} className="mr-1" /> Сохранить
-            </Button>
-          )}
+          <Button size="sm" onClick={handleSave} className="h-7 px-3 text-xs" style={{ background: "#7c6bff", color: "#fff" }}>
+            <Check size={12} className="mr-1" /> Сохранить
+          </Button>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/5" style={{ color: "#64748b" }}>
             <X size={16} />
           </button>
