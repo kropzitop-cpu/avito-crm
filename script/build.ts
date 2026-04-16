@@ -59,6 +59,15 @@ async function buildAll() {
   }
   // Remove remaining type="module" and crossorigin attrs
   html = html.replace(/ type="module"/g, "").replace(/ crossorigin/g, "");
+
+  // Move all <script>...</script> blocks from <head> to end of <body>
+  const scriptBlocks: string[] = [];
+  html = html.replace(/<script>([\/\s\S]*?)<\/script>/g, (match) => {
+    scriptBlocks.push(match);
+    return "";
+  });
+  html = html.replace("</body>", scriptBlocks.join("\n") + "\n</body>");
+
   await writeFile(htmlPath, html, "utf-8");
   console.log("patched index.html (inlined JS/CSS for iframe CSP compatibility)");
 
