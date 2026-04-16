@@ -24,7 +24,8 @@ function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen w-full" style={{ background: "var(--color-bg-deep)" }}>
       <AppSidebar />
-      <main className="flex-1 overflow-auto">
+      {/* pt-[52px] pb-[60px] — mobile top header + bottom tabbar; md: no extra padding */}
+      <main className="flex-1 overflow-auto pt-[52px] pb-[60px] md:pt-0 md:pb-0">
         {children}
       </main>
     </div>
