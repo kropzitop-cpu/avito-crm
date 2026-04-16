@@ -15,10 +15,10 @@ const upload = multer({
   },
 });
 
-// Multer for document uploads (any file type)
+// Multer for document uploads (any file type, including video)
 const uploadDoc = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB — for video
 });
 import {
   insertClientSchema, insertPaymentSchema, insertMaterialSchema,

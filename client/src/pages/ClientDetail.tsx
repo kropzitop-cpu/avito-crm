@@ -123,6 +123,33 @@ function DropZone({ onFiles, category, folderName }: { onFiles: (files: Processe
     else if (mime.startsWith("video/")) cat = "video";
     else if (ext === "txt" || ext === "docx" || mime.includes("text")) cat = cat === "all" ? "text" : cat;
 
+    // video — upload to disk via /api/documents/upload, store URL in content
+    if (mime.startsWith("video/")) {
+      return new Promise((resolve, reject) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        const token = getToken();
+        fetch(`${API_BASE}/api/documents/upload`, {
+          method: "POST",
+          headers: token ? { "x-session-token": token } : {},
+          body: fd,
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (!data.fileUrl) throw new Error("no fileUrl");
+            resolve({
+              title: file.name.replace(/\.[^.]+$/, ""),
+              category: "video",
+              content: data.fileUrl,
+              mimeType: mime,
+              fileName: file.name,
+              folderName,
+            });
+          })
+          .catch(reject);
+      });
+    }
+
     // .docx — parse via server
     if (ext === "docx") {
       try {
@@ -1580,6 +1607,21 @@ export default function ClientDetail() {
                                   <ExternalLink size={10} /> Открыть
                                 </div>
                               </a>
+                            ) : (cat === "video" && m.content && (m.content.startsWith("/uploads/") || m.content.startsWith("http"))) ? (
+                              // Video thumbnail card
+                              <div className="relative aspect-square overflow-hidden bg-black/40 flex items-center justify-center">
+                                <video
+                                  src={m.content.startsWith("/uploads/") ? `${API_BASE}${m.content}` : m.content}
+                                  className="w-full h-full object-cover"
+                                  preload="metadata"
+                                  muted
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                                    <Video size={18} style={{ color: "white" }} />
+                                  </div>
+                                </div>
+                              </div>
                             ) : (
                               <div className="flex-1 flex items-center justify-center">
                                 <span style={{ color: catColor[cat] || "#7c6bff", transform: "scale(2)" }}>{catIcon(cat)}</span>
@@ -1730,6 +1772,8 @@ export default function ClientDetail() {
                 const pMime = (previewMat as any).mimeType || "";
                 const isText = (pCat === "text" || pMime === "text/plain" || pMime.includes("word")) && previewMat.content && !previewMat.content.startsWith("data:");
                 const isImg = isImage(pMime, previewMat.content);
+                const isVid = pCat === "video" && previewMat.content && (previewMat.content.startsWith("/uploads/") || previewMat.content.startsWith("http"));
+                const videoSrc = isVid ? (previewMat.content!.startsWith("/uploads/") ? `${API_BASE}${previewMat.content}` : previewMat.content!) : "";
                 return (
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
@@ -1749,9 +1793,26 @@ export default function ClientDetail() {
                           <ExternalLink size={11} /> Скачать TXT
                         </button>
                       )}
+                      {isVid && (
+                        <a
+                          href={videoSrc}
+                          download
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+                          style={{ background: "rgba(244,114,182,0.15)", color: "#f472b6", border: "1px solid rgba(244,114,182,0.3)" }}
+                        >
+                          <ExternalLink size={11} /> Скачать
+                        </a>
+                      )}
                     </div>
                     {isImg ? (
                       <img src={previewMat.content!} alt={previewMat.title} className="rounded-xl max-h-[70vh] object-contain w-full" />
+                    ) : isVid ? (
+                      <video
+                        src={videoSrc}
+                        controls
+                        className="rounded-xl w-full max-h-[70vh]"
+                        style={{ background: "#000" }}
+                      />
                     ) : isText ? (
                       <div className="rounded-xl p-5 overflow-y-auto max-h-[65vh]"
                         style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
