@@ -394,8 +394,13 @@ function MaterialForm({ clientId, onClose, existing, folders, defaultCategory, d
       <div className="flex gap-2 justify-end pt-1">
         <Button variant="ghost" onClick={onClose}>Отмена</Button>
         <Button
-          onClick={() => mutation.mutate({ ...form, folderName: finalFolder })}
-          disabled={mutation.isPending || !form.title}
+          onClick={() => {
+            const autoTitle = (!form.title && form.category === "link" && form.content)
+              ? (() => { try { return new URL(form.content.startsWith("http") ? form.content : `https://${form.content}`).hostname.replace("www.", ""); } catch { return form.content.substring(0, 40); } })()
+              : form.title;
+            mutation.mutate({ ...form, title: autoTitle, folderName: finalFolder });
+          }}
+          disabled={mutation.isPending || (!form.title && form.category !== "link") || (form.category === "link" && !form.content)}
           style={{ background: "var(--color-violet)", color: "white" }}
         >
           {existing ? "Сохранить" : "Добавить"}
