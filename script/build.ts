@@ -46,7 +46,10 @@ async function buildAll() {
     const jsContent = (await readFile(`${distDir}/${jsMatch[1].replace('./', '')}`, "utf-8"))
       // Escape </script> inside JS to prevent early tag closing
       .replace(/<\/script>/gi, '<\/script>');
+    // Replace first script src tag with inlined content, remove all others
     html = html.replace(/<script[^>]+src="[^"]+"[^>]*><\/script>/, `<script>${jsContent}<\/script>`);
+    // Remove any remaining external script tags (duplicates from vite)
+    html = html.replace(/<script[^>]+src="[^"]+"[^>]*><\/script>/g, "");
   }
   // Find and inline CSS files
   const cssMatch = html.match(/href="(\.\/assets\/[^"]+\.css)"/);
