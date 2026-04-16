@@ -158,11 +158,13 @@ function StickerCard({
 // ── Панель редактирования заметки ────────────────────────────────────────────
 function NotePanel({
   note,
+  folders,
   onClose,
   onSave,
   onDelete,
 }: {
   note: Note | null;
+  folders: { id: number; name: string; color: string }[];
   onClose: () => void;
   onSave: (data: Partial<Note>) => void;
   onDelete: () => void;
@@ -172,28 +174,25 @@ function NotePanel({
   const [color, setColor] = useState("#1e2235");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [folderId, setFolderId] = useState<number | null>(null);
 
-  // Текущие данные в ref — для автосохранения без stale closure
-  const dataRef = useRef({ title: "", content: "", color: "#1e2235", tags: [] as string[] });
+  const dataRef = useRef({ title: "", content: "", color: "#1e2235", tags: [] as string[], folderId: null as number | null });
   const prevNoteIdRef = useRef<number | null>(null);
 
-  // Синхронизируем ref при каждом изменении
-  useEffect(() => { dataRef.current = { title, content, color, tags }; }, [title, content, color, tags]);
+  useEffect(() => { dataRef.current = { title, content, color, tags, folderId }; }, [title, content, color, tags, folderId]);
 
-  // При смене заметки — сохраняем предыдущую, загружаем новую
   useEffect(() => {
     if (!note) return;
-    // Сохраняем предыдущую если была
     if (prevNoteIdRef.current !== null && prevNoteIdRef.current !== note.id) {
       const d = dataRef.current;
-      onSave({ title: d.title, content: d.content, color: d.color, tags: JSON.stringify(d.tags) });
+      onSave({ title: d.title, content: d.content, color: d.color, tags: JSON.stringify(d.tags), folderId: d.folderId } as any);
     }
     prevNoteIdRef.current = note.id;
-    // Загружаем новую
     setTitle(note.title || "");
     setContent(note.content || "");
     setColor(note.color || "#1e2235");
     setTags(parseTags(note.tags));
+    setFolderId((note as any).folderId ?? null);
     setTagInput("");
   }, [note?.id]);
 
@@ -210,7 +209,7 @@ function NotePanel({
   };
 
   const handleSave = () => {
-    onSave({ title, content, color, tags: JSON.stringify(tags) });
+    onSave({ title, content, color, tags: JSON.stringify(tags), folderId } as any);
   };
 
   if (!note) return null;
@@ -274,6 +273,22 @@ function NotePanel({
           </div>
         </div>
 
+        {/* Папка */}
+        {folders.length > 0 && (
+          <div>
+            <div className="text-xs font-medium mb-1.5" style={{ color: "#64748b" }}>Папка</div>
+            <select
+              value={folderId ?? ""}
+              onChange={e => { setFolderId(e.target.value ? Number(e.target.value) : null); }}
+              className="w-full h-8 text-xs rounded-lg px-2 border"
+              style={{ background: "#191c2a", color: "#e2e8f0", borderColor: "#252840" }}
+            >
+              <option value="">Без папки</option>
+              {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+        )}
+
         {/* Теги */}
         <div>
           <div className="text-xs font-medium mb-1.5" style={{ color: "#64748b" }}>Теги</div>
@@ -336,76 +351,68 @@ function NotePanel({
 }
 
 // ── Главный компонент ─────────────────────────────────────────────────────────
+type NoteFolder = { id: number; name: string; color: string; createdAt: string };
+
 export default function Notes() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
-  const [listView, setListView] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null | "all">("all");
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState("#7c6bff");
 
-  const { data: rawNotes = [] } = useQuery<Note[]>({
-    queryKey: ["/api/notes"],
-    throwOnError: false,
-  });
+  const { data: rawNotes = [] } = useQuery<Note[]>({ queryKey: ["/api/notes"], throwOnError: false });
+  const { data: folders = [] } = useQuery<NoteFolder[]>({ queryKey: ["/api/note-folders"], throwOnError: false });
 
   const createMutation = useMutation({
-    mutationFn: async (data: Partial<Note>) => {
-      const r = await apiRequest("POST", "/api/notes", data);
-      return r.json();
-    },
-    onSuccess: (note) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
-      setActiveNote(note);
-    },
+    mutationFn: async (data: Partial<Note>) => { const r = await apiRequest("POST", "/api/notes", data); return r.json(); },
+    onSuccess: (note) => { queryClient.invalidateQueries({ queryKey: ["/api/notes"] }); setActiveNote(note); },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<Note> }) => {
-      const r = await apiRequest("PATCH", `/api/notes/${id}`, data);
-      return r.json();
-    },
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
-      if (activeNote && updated?.id === activeNote.id) setActiveNote(updated);
-    },
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Note> }) => { const r = await apiRequest("PATCH", `/api/notes/${id}`, data); return r.json(); },
+    onSuccess: (updated) => { queryClient.invalidateQueries({ queryKey: ["/api/notes"] }); if (activeNote && updated?.id === activeNote.id) setActiveNote(updated); },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/notes/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notes"] });
-      setActiveNote(null);
-      toast({ title: "Заметка удалена" });
-    },
+    mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/notes/${id}`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/notes"] }); setActiveNote(null); toast({ title: "Заметка удалена" }); },
   });
 
-  // Все уникальные теги
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    rawNotes.forEach((n) => parseTags(n.tags).forEach((t) => set.add(t)));
-    return Array.from(set);
-  }, [rawNotes]);
+  const createFolderMutation = useMutation({
+    mutationFn: async (data: { name: string; color: string }) => { const r = await apiRequest("POST", "/api/note-folders", data); return r.json(); },
+    onSuccess: (folder) => { queryClient.invalidateQueries({ queryKey: ["/api/note-folders"] }); setSelectedFolderId(folder.id); setShowNewFolder(false); setNewFolderName(""); },
+  });
 
-  // Фильтрация
+  const deleteFolderMutation = useMutation({
+    mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/note-folders/${id}`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/note-folders", "/api/notes"] }); setSelectedFolderId("all"); toast({ title: "Папка удалена" }); },
+  });
+
+  // Поиск по тексту И по тегам
   const filtered = useMemo(() => {
     return rawNotes.filter((n) => {
-      const matchSearch =
-        !search ||
-        n.title.toLowerCase().includes(search.toLowerCase()) ||
-        (n.content || "").toLowerCase().includes(search.toLowerCase());
-      const matchTag =
-        !selectedTag || parseTags(n.tags).includes(selectedTag);
-      return matchSearch && matchTag;
+      // Фильтр папки
+      if (selectedFolderId !== "all") {
+        if (selectedFolderId === null && n.folderId != null) return false;
+        if (selectedFolderId !== null && n.folderId !== selectedFolderId) return false;
+      }
+      if (!search) return true;
+      const q = search.toLowerCase();
+      const inTitle = n.title.toLowerCase().includes(q);
+      const inContent = (n.content || "").toLowerCase().includes(q);
+      const inTags = parseTags(n.tags).some(t => t.toLowerCase().includes(q));
+      return inTitle || inContent || inTags;
     });
-  }, [rawNotes, search, selectedTag]);
+  }, [rawNotes, search, selectedFolderId]);
 
-  const pinned = filtered.filter((n) => n.isPinned);
-  const unpinned = filtered.filter((n) => !n.isPinned);
+  const pinned = filtered.filter(n => n.isPinned);
+  const unpinned = filtered.filter(n => !n.isPinned);
 
   const handleCreate = () => {
-    createMutation.mutate({ title: "Новая заметка", content: "", color: "#1e2235", tags: "[]", isPinned: false });
+    const folderId = selectedFolderId !== "all" ? selectedFolderId : null;
+    createMutation.mutate({ title: "Новая заметка", content: "", color: "#1e2235", tags: "[]", isPinned: false, folderId } as any);
   };
 
   const handleSave = useCallback((data: Partial<Note>) => {
@@ -413,106 +420,151 @@ export default function Notes() {
     updateMutation.mutate({ id: activeNote.id, data });
   }, [activeNote?.id]);
 
-  const handlePin = (note: Note) => {
-    updateMutation.mutate({ id: note.id, data: { isPinned: !note.isPinned } });
-  };
+  const handlePin = (note: Note) => { updateMutation.mutate({ id: note.id, data: { isPinned: !note.isPinned } }); };
+  const handleDelete = (id: number) => { deleteMutation.mutate(id); };
 
-  const handleDelete = (id: number) => {
-    deleteMutation.mutate(id);
-  };
+  const FOLDER_COLORS = ["#7c6bff","#22d3ee","#4ade80","#f87171","#fbbf24","#fb923c","#f472b6","#94a3b8"];
 
-  const gridCols = listView ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+  const currentFolderName = selectedFolderId === "all"
+    ? "Все заметки"
+    : selectedFolderId === null
+    ? "Без папки"
+    : folders.find(f => f.id === selectedFolderId)?.name || "Заметки";
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--color-bg-deep)" }}>
-      {/* ── Левая панель: доска + правый сайдбар (список) ── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Основная область */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Шапка */}
-          <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "#252840" }}>
-            <div className="flex items-center gap-3">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg, #7c6bff22, #22d3ee22)", border: "1px solid #7c6bff44" }}
-              >
-                <StickyNote size={18} style={{ color: "#a78bfa" }} />
-              </div>
-              <div>
-                <div className="font-bold text-sm" style={{ color: "#e2e8f0" }}>Заметки</div>
-                <div className="text-xs" style={{ color: "#475569" }}>{rawNotes.length} заметок</div>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              {/* Вид */}
-              <button
-                onClick={() => setListView(!listView)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/5 transition-colors"
-                style={{ color: listView ? "#a78bfa" : "#64748b", background: listView ? "rgba(124,107,255,0.1)" : "transparent" }}
-                title={listView ? "Плитки" : "Список"}
-              >
-                <List size={16} />
-              </button>
-
-              <Button
-                onClick={handleCreate}
-                size="sm"
-                className="h-8 px-3 text-xs font-medium"
-                style={{ background: "linear-gradient(135deg, #7c6bff, #a78bfa)", color: "#fff", border: "none" }}
-              >
-                <Plus size={14} className="mr-1" />
-                Новая заметка
-              </Button>
-            </div>
+      {/* ── Левый сайдбар: папки ── */}
+      <div className="w-52 shrink-0 flex flex-col border-r overflow-hidden" style={{ background: "#0a0c17", borderColor: "#252840" }}>
+        <div className="px-4 py-4 border-b" style={{ borderColor: "#252840" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <StickyNote size={14} style={{ color: "#a78bfa" }} />
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "#64748b" }}>Папки</span>
           </div>
+          {/* Поиск */}
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#475569" }} />
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Поиск..."
+              className="pl-7 h-7 text-xs border-[#252840]"
+              style={{ background: "#131520", color: "#e2e8f0" }}
+            />
+          </div>
+        </div>
 
-          {/* Поиск + теги */}
-          <div className="px-6 py-3 border-b flex items-center gap-3 flex-wrap shrink-0" style={{ borderColor: "#252840" }}>
-            <div className="relative flex-1 min-w-48 max-w-xs">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#475569" }} />
+        <div className="flex-1 overflow-y-auto py-2">
+          {/* Все заметки */}
+          {[
+            { id: "all" as const, name: "Все заметки", color: "#a78bfa", count: rawNotes.length },
+            { id: null as const, name: "Без папки", color: "#475569", count: rawNotes.filter(n => n.folderId == null).length },
+          ].map(item => (
+            <button
+              key={String(item.id)}
+              onClick={() => setSelectedFolderId(item.id)}
+              className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5"
+              style={{
+                background: selectedFolderId === item.id ? "rgba(124,107,255,0.1)" : "transparent",
+                borderLeft: selectedFolderId === item.id ? "2px solid #7c6bff" : "2px solid transparent",
+              }}
+            >
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
+              <span className="text-xs flex-1 truncate" style={{ color: selectedFolderId === item.id ? "#e2e8f0" : "#94a3b8" }}>{item.name}</span>
+              <span className="text-xs" style={{ color: "#334155" }}>{item.count}</span>
+            </button>
+          ))}
+
+          {/* Разделитель */}
+          {folders.length > 0 && <div className="mx-4 my-2 border-t" style={{ borderColor: "#1e2235" }} />}
+
+          {/* Папки пользователя */}
+          {folders.map(folder => {
+            const count = rawNotes.filter(n => n.folderId === folder.id).length;
+            const isActive = selectedFolderId === folder.id;
+            return (
+              <button
+                key={folder.id}
+                onClick={() => setSelectedFolderId(folder.id)}
+                className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5 group"
+                style={{
+                  background: isActive ? "rgba(124,107,255,0.1)" : "transparent",
+                  borderLeft: isActive ? `2px solid ${folder.color}` : "2px solid transparent",
+                }}
+              >
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: folder.color }} />
+                <span className="text-xs flex-1 truncate" style={{ color: isActive ? "#e2e8f0" : "#94a3b8" }}>{folder.name}</span>
+                <span className="text-xs" style={{ color: "#334155" }}>{count}</span>
+                <button
+                  onClick={e => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
+                  className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-500/20 transition-all"
+                  style={{ color: "#f87171" }}
+                >
+                  <X size={10} />
+                </button>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Новая папка */}
+        <div className="p-3 border-t" style={{ borderColor: "#252840" }}>
+          {showNewFolder ? (
+            <div className="space-y-2">
               <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск..."
-                className="pl-8 h-8 text-xs border-[#252840]"
+                value={newFolderName}
+                onChange={e => setNewFolderName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && newFolderName.trim()) createFolderMutation.mutate({ name: newFolderName.trim(), color: newFolderColor }); if (e.key === "Escape") setShowNewFolder(false); }}
+                placeholder="Название папки"
+                autoFocus
+                className="h-7 text-xs border-[#252840]"
                 style={{ background: "#131520", color: "#e2e8f0" }}
               />
-            </div>
-
-            {allTags.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                <button
-                  onClick={() => setSelectedTag(null)}
-                  className="text-xs px-2.5 py-0.5 rounded-full transition-colors"
-                  style={{
-                    background: !selectedTag ? "rgba(124,107,255,0.2)" : "transparent",
-                    color: !selectedTag ? "#a78bfa" : "#64748b",
-                    border: `1px solid ${!selectedTag ? "#7c6bff44" : "#252840"}`,
-                  }}
-                >
-                  Все
-                </button>
-                {allTags.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setSelectedTag(selectedTag === t ? null : t)}
-                    className="text-xs px-2.5 py-0.5 rounded-full transition-colors"
-                    style={{
-                      background: selectedTag === t ? "rgba(124,107,255,0.2)" : "transparent",
-                      color: selectedTag === t ? "#a78bfa" : "#64748b",
-                      border: `1px solid ${selectedTag === t ? "#7c6bff44" : "#252840"}`,
-                    }}
-                  >
-                    #{t}
-                  </button>
+              <div className="flex gap-1 flex-wrap">
+                {FOLDER_COLORS.map(c => (
+                  <button key={c} onClick={() => setNewFolderColor(c)}
+                    className="w-5 h-5 rounded-md transition-all"
+                    style={{ background: c, outline: newFolderColor === c ? `2px solid ${c}` : "none", outlineOffset: 2 }}
+                  />
                 ))}
               </div>
-            )}
+              <div className="flex gap-1">
+                <Button size="sm" className="flex-1 h-6 text-xs" style={{ background: "#7c6bff", color: "#fff" }}
+                  onClick={() => { if (newFolderName.trim()) createFolderMutation.mutate({ name: newFolderName.trim(), color: newFolderColor }); }}>
+                  <Check size={10} className="mr-1" />Создать
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setShowNewFolder(false)}>
+                  <X size={10} />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowNewFolder(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5"
+              style={{ color: "#a78bfa", border: "1px dashed #7c6bff44" }}>
+              <Plus size={11} /> Новая папка
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Основная область ── */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Шапка */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b shrink-0" style={{ borderColor: "#252840" }}>
+            <div className="flex items-center gap-3">
+              <div className="font-bold text-sm" style={{ color: "#e2e8f0" }}>{currentFolderName}</div>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#1e2235", color: "#64748b" }}>{filtered.length}</span>
+            </div>
+            <Button onClick={handleCreate} size="sm" className="h-8 px-3 text-xs font-medium"
+              style={{ background: "linear-gradient(135deg, #7c6bff, #a78bfa)", color: "#fff", border: "none" }}>
+              <Plus size={14} className="mr-1" /> Новая заметка
+            </Button>
           </div>
 
           {/* Стикерная доска */}
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="flex-1 overflow-y-auto px-5 py-5">
             {rawNotes.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: "#334155" }}>
                 <StickyNote size={48} strokeWidth={1} />
@@ -520,58 +572,41 @@ export default function Notes() {
                   <div className="text-base font-medium mb-1" style={{ color: "#475569" }}>Заметок пока нет</div>
                   <div className="text-sm">Нажмите «Новая заметка» чтобы начать</div>
                 </div>
-                <Button
-                  onClick={handleCreate}
-                  style={{ background: "linear-gradient(135deg, #7c6bff, #a78bfa)", color: "#fff", border: "none" }}
-                >
+                <Button onClick={handleCreate} style={{ background: "linear-gradient(135deg, #7c6bff, #a78bfa)", color: "#fff", border: "none" }}>
                   <Plus size={14} className="mr-1.5" /> Создать первую заметку
                 </Button>
               </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2" style={{ color: "#334155" }}>
+                <Search size={32} strokeWidth={1} />
+                <div className="text-sm" style={{ color: "#475569" }}>Ничего не найдено</div>
+              </div>
             ) : (
               <div className="space-y-5">
-                {/* Закреплённые */}
                 {pinned.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <Pin size={12} style={{ color: "#a78bfa" }} />
-                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>
-                        Закреплённые
-                      </span>
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Закреплённые</span>
                     </div>
-                    <div className={`grid gap-4 ${gridCols}`}>
-                      {pinned.map((n) => (
-                        <StickerCard
-                          key={n.id}
-                          note={n}
-                          onOpen={() => setActiveNote(n)}
-                          onPin={() => handlePin(n)}
-                          onDelete={() => handleDelete(n.id)}
-                        />
+                    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {pinned.map(n => (
+                        <StickerCard key={n.id} note={n} onOpen={() => setActiveNote(n)} onPin={() => handlePin(n)} onDelete={() => handleDelete(n.id)} />
                       ))}
                     </div>
                   </div>
                 )}
-
-                {/* Остальные */}
                 {unpinned.length > 0 && (
                   <div>
                     {pinned.length > 0 && (
                       <div className="flex items-center gap-2 mb-3">
                         <StickyNote size={12} style={{ color: "#64748b" }} />
-                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>
-                          Остальные
-                        </span>
+                        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Остальные</span>
                       </div>
                     )}
-                    <div className={`grid gap-4 ${gridCols}`}>
-                      {unpinned.map((n) => (
-                        <StickerCard
-                          key={n.id}
-                          note={n}
-                          onOpen={() => setActiveNote(n)}
-                          onPin={() => handlePin(n)}
-                          onDelete={() => handleDelete(n.id)}
-                        />
+                    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {unpinned.map(n => (
+                        <StickerCard key={n.id} note={n} onOpen={() => setActiveNote(n)} onPin={() => handlePin(n)} onDelete={() => handleDelete(n.id)} />
                       ))}
                     </div>
                   </div>
@@ -581,74 +616,49 @@ export default function Notes() {
           </div>
         </div>
 
-        {/* ── Правый сайдбар: список заметок ── */}
-        <div
-          className="w-56 shrink-0 border-l flex flex-col overflow-hidden"
-          style={{ background: "#0f1120", borderColor: "#252840" }}
-        >
+        {/* ── Правый список ── */}
+        <div className="w-48 shrink-0 border-l flex flex-col overflow-hidden" style={{ background: "#0a0c17", borderColor: "#252840" }}>
           <div className="px-4 py-3 border-b" style={{ borderColor: "#252840" }}>
-            <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>
-              Список
-            </div>
+            <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#64748b" }}>Список</div>
           </div>
-          <div className="flex-1 overflow-y-auto py-2">
-            {rawNotes.length === 0 ? (
-              <div className="px-4 py-6 text-xs text-center" style={{ color: "#334155" }}>Пусто</div>
-            ) : (
-              rawNotes.map((n) => {
-                const isActive = activeNote?.id === n.id;
-                const accent = STICKER_ACCENT[n.color] || "#a78bfa";
-                return (
-                  <button
-                    key={n.id}
-                    onClick={() => setActiveNote(n)}
-                    className="w-full text-left px-4 py-2.5 flex items-start gap-2 transition-colors hover:bg-white/5"
-                    style={{
-                      background: isActive ? "rgba(124,107,255,0.08)" : "transparent",
-                      borderLeft: isActive ? "2px solid #7c6bff" : "2px solid transparent",
-                    }}
-                  >
-                    <div
-                      className="w-2.5 h-2.5 rounded-full mt-1 shrink-0"
-                      style={{ background: n.color, border: `1.5px solid ${STICKER_BORDER[n.color] || "#3a3f5c"}` }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium truncate" style={{ color: isActive ? "#e2e8f0" : "#94a3b8" }}>
-                        {n.title || "Без названия"}
-                      </div>
-                      {n.isPinned && (
-                        <div className="text-xs" style={{ color: accent }}>
-                          <Pin size={9} className="inline mr-0.5" />закреплено
+          <div className="flex-1 overflow-y-auto py-1">
+            {filtered.length === 0
+              ? <div className="px-4 py-6 text-xs text-center" style={{ color: "#334155" }}>Пусто</div>
+              : filtered.map(n => {
+                  const isActive = activeNote?.id === n.id;
+                  const accent = STICKER_ACCENT[n.color] || "#a78bfa";
+                  return (
+                    <button key={n.id} onClick={() => setActiveNote(n)}
+                      className="w-full text-left px-3 py-2 flex items-start gap-2 transition-colors hover:bg-white/5"
+                      style={{ background: isActive ? "rgba(124,107,255,0.08)" : "transparent", borderLeft: isActive ? "2px solid #7c6bff" : "2px solid transparent" }}>
+                      <div className="w-2 h-2 rounded-full mt-1 shrink-0" style={{ background: n.color, border: `1.5px solid ${STICKER_BORDER[n.color] || "#3a3f5c"}` }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium truncate" style={{ color: isActive ? "#e2e8f0" : "#94a3b8" }}>{n.title || "Без названия"}</div>
+                        <div className="text-xs" style={{ color: "#334155" }}>
+                          {new Date(n.updatedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
                         </div>
-                      )}
-                      <div className="text-xs" style={{ color: "#334155" }}>
-                        {new Date(n.updatedAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
                       </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
+                    </button>
+                  );
+                })
+            }
           </div>
-
-          {/* Кнопка добавить */}
           <div className="p-3 border-t" style={{ borderColor: "#252840" }}>
-            <button
-              onClick={handleCreate}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors hover:bg-white/5"
-              style={{ color: "#a78bfa", border: "1px dashed #7c6bff44" }}
-            >
-              <Plus size={12} /> Добавить
+            <button onClick={handleCreate}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs transition-colors hover:bg-white/5"
+              style={{ color: "#a78bfa", border: "1px dashed #7c6bff44" }}>
+              <Plus size={11} /> Добавить
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Панель редактирования (правая) ── */}
+      {/* ── Панель редактирования ── */}
       {activeNote && (
         <div className="w-80 shrink-0 border-l flex flex-col overflow-hidden" style={{ borderColor: "#252840" }}>
           <NotePanel
             note={activeNote}
+            folders={folders}
             onClose={() => setActiveNote(null)}
             onSave={handleSave}
             onDelete={() => handleDelete(activeNote.id)}

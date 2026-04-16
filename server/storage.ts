@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 import {
   clients, payments, materials, reminders, reports, documents, settings, paymentSchedules,
-  prompts, promptModels, promptModelSteps, avitoConnections, avitoStats, notes,
+  prompts, promptModels, promptModelSteps, avitoConnections, avitoStats, notes, noteFolders,
   type Client, type InsertClient,
   type Payment, type InsertPayment,
   type Material, type InsertMaterial,
@@ -17,6 +17,7 @@ import {
   type AvitoConnection, type InsertAvitoConnection,
   type AvitoStat, type InsertAvitoStat,
   type Note, type InsertNote,
+  type NoteFolder,
 } from "@shared/schema";
 
 // Use /data/crm.db on Railway (persistent volume), fallback to local crm.db
@@ -159,6 +160,12 @@ sqlite.exec(`
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS note_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#7c6bff',
+    created_at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL DEFAULT 'Без названия',
@@ -169,6 +176,7 @@ sqlite.exec(`
     pos_x INTEGER DEFAULT 0,
     pos_y INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
+    folder_id INTEGER DEFAULT NULL,
     updated_at TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS avito_stats (
@@ -633,6 +641,23 @@ export const storage: IStorage = {
   },
   deleteNote(id: number) {
     db.delete(notes).where(eq(notes.id, id)).run();
+  },
+
+  // ── Note Folders ──────────────────────────────────────────────────────────────────────
+  getNoteFolders() {
+    return db.select().from(noteFolders).orderBy(noteFolders.name).all();
+  },
+  createNoteFolder(data: { name: string; color?: string }) {
+    const now = new Date().toISOString();
+    return db.insert(noteFolders).values({ name: data.name, color: data.color || '#7c6bff', createdAt: now }).returning().get()!;
+  },
+  updateNoteFolder(id: number, data: { name?: string; color?: string }) {
+    return db.update(noteFolders).set(data).where(eq(noteFolders.id, id)).returning().get();
+  },
+  deleteNoteFolder(id: number) {
+    // Убираем folderId у заметок этой папки
+    db.update(notes).set({ folderId: null } as any).where(eq((notes as any).folderId, id)).run();
+    db.delete(noteFolders).where(eq(noteFolders.id, id)).run();
   },
 
   // ── Dashboard ─────────────────────────────────────────────────────────────

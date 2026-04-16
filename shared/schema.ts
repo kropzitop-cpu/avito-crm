@@ -288,6 +288,7 @@ export const notes = sqliteTable("notes", {
   color: text("color").notNull().default("#1e2235"),   // цвет стикера
   tags: text("tags").default("[]"),                     // JSON array of strings
   isPinned: integer("is_pinned", { mode: "boolean" }).default(false),
+  folderId: integer("folder_id"),
   posX: integer("pos_x").default(0),
   posY: integer("pos_y").default(0),
   createdAt: text("created_at").notNull(),
@@ -297,3 +298,15 @@ export const notes = sqliteTable("notes", {
 export const insertNoteSchema = createInsertSchema(notes).omit({ id: true });
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
+
+// ── Note Folders (папки для заметок) ─────────────────────────────────────────
+export const noteFolders = sqliteTable("note_folders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#7c6bff"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertNoteFolderSchema = createInsertSchema(noteFolders).omit({ id: true });
+export type InsertNoteFolder = z.infer<typeof insertNoteFolderSchema>;
+export type NoteFolder = typeof noteFolders.$inferSelect;

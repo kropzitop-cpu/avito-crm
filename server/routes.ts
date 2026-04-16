@@ -769,4 +769,25 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     storage.deleteNote(parseInt(req.params.id));
     res.json({ ok: true });
   });
+
+  // ── Note Folders API ──────────────────────────────────────────────────────
+  app.get("/api/note-folders", (_req, res) => {
+    res.json(storage.getNoteFolders());
+  });
+
+  app.post("/api/note-folders", (req, res) => {
+    const { name, color } = req.body;
+    if (!name) return res.status(400).json({ error: "name required" });
+    res.json(storage.createNoteFolder({ name, color }));
+  });
+
+  app.patch("/api/note-folders/:id", (req, res) => {
+    const folder = storage.updateNoteFolder(parseInt(req.params.id), req.body);
+    res.json(folder);
+  });
+
+  app.delete("/api/note-folders/:id", (req, res) => {
+    storage.deleteNoteFolder(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
 }
