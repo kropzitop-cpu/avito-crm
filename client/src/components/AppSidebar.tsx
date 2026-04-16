@@ -40,7 +40,7 @@ export default function AppSidebar() {
             <BarChart3 size={18} color="white" />
           </div>
           <div>
-            <div className="font-bold text-sm leading-tight" style={{ color: "#e2e8f0" }}>АвитоCRM</div>
+            <div className="font-bold text-sm leading-tight" style={{ color: "#e2e8f0" }}>ВоблаCRM</div>
             <div className="text-xs" style={{ color: "#64748b" }}>для авитологов</div>
           </div>
         </div>

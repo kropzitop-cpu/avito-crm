@@ -48,7 +48,7 @@ export default function Login() {
           >
             <BarChart3 size={28} style={{ color: "white" }} />
           </div>
-          <h1 className="text-2xl font-bold" style={{ color: "#e2e8f0" }}>АвитоCRM</h1>
+          <h1 className="text-2xl font-bold" style={{ color: "#e2e8f0" }}>ВоблаCRM</h1>
           <p className="text-sm mt-1" style={{ color: "#475569" }}>для авитологов</p>
         </div>
 
