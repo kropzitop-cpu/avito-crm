@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Plus, Pin, PinOff, Trash2, X, Tag, Search, StickyNote,
@@ -174,13 +174,33 @@ function NotePanel({
   const [tags, setTags] = useState<string[]>(note ? parseTags(note.tags) : []);
   const [dirty, setDirty] = useState(false);
 
+  // Refs для автосохранения при смене заметки
+  const dirtyRef = useRef(false);
+  const saveRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    saveRef.current = () => {
+      if (dirtyRef.current) {
+        onSave({ title, content, color, tags: JSON.stringify(tags) });
+      }
+    };
+  }, [title, content, color, tags, onSave]);
+
   useEffect(() => {
     if (note) {
+      // Автосохраняем предыдущую заметку перед сменой
+      saveRef.current();
       setTitle(note.title);
       setContent(note.content || "");
       setColor(note.color);
       setTags(parseTags(note.tags));
+      setTagInput("");
       setDirty(false);
+      dirtyRef.current = false;
     }
   }, [note?.id]);
 
@@ -400,10 +420,10 @@ export default function Notes() {
     createMutation.mutate({ title: "Новая заметка", content: "", color: "#1e2235", tags: "[]", isPinned: false });
   };
 
-  const handleSave = (data: Partial<Note>) => {
+  const handleSave = useCallback((data: Partial<Note>) => {
     if (!activeNote) return;
     updateMutation.mutate({ id: activeNote.id, data });
-  };
+  }, [activeNote?.id]);
 
   const handlePin = (note: Note) => {
     updateMutation.mutate({ id: note.id, data: { isPinned: !note.isPinned } });
