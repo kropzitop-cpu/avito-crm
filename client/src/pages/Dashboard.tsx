@@ -26,7 +26,8 @@ function StatCard({ icon: Icon, label, value, accent, sub }: {
 
 function ReminderRow({ r }: { r: Reminder }) {
   const dueDate = new Date(r.dueDate);
-  const isOverdue = dueDate < new Date() && !r.isDone;
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const isOverdue = dueDate < todayStart && !r.isDone;
   const typeLabels: Record<string, string> = {
     report: "Отчёт", payment: "Оплата", renewal: "Продление", task: "Задача", general: "Общее",
   };

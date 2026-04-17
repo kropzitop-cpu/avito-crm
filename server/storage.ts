@@ -212,6 +212,7 @@ const migrations = [
   "ALTER TABLE reminders ADD COLUMN recurrence TEXT DEFAULT 'none'",
   "ALTER TABLE reminders ADD COLUMN recurrence_end TEXT",
   "ALTER TABLE reminders ADD COLUMN parent_id INTEGER",
+  "ALTER TABLE notes ADD COLUMN folder_id INTEGER DEFAULT NULL",
   // Fix is_paid default to 0 for new rows via migration is not possible in SQLite,
   // but new rows created via app will use correct defaults
 ];

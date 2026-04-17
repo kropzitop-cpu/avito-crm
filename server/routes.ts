@@ -751,8 +751,8 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
   });
 
   app.post("/api/notes", (req, res) => {
-    const { title = "Без названия", content = "", color = "#1e2235", tags = "[]", isPinned = false, posX = 0, posY = 0 } = req.body;
-    const note = storage.createNote({ title, content, color, tags: typeof tags === "string" ? tags : JSON.stringify(tags), isPinned, posX, posY });
+    const { title = "Без названия", content = "", color = "#1e2235", tags = "[]", isPinned = false, posX = 0, posY = 0, folderId = null } = req.body;
+    const note = storage.createNote({ title, content, color, tags: typeof tags === "string" ? tags : JSON.stringify(tags), isPinned, posX, posY, folderId });
     res.json(note);
   });
 

@@ -183,7 +183,8 @@ function TaskPanel({ r, clients, onClose }: { r: Reminder; clients: Client[]; on
     },
   });
 
-  const isOverdue = !r.isDone && new Date(r.dueDate) < new Date();
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const isOverdue = !r.isDone && new Date(r.dueDate) < todayStart;
   const cName = clients.find(c => c.id === r.clientId)?.name;
 
   if (editing) {

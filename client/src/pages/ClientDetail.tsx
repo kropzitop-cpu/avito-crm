@@ -829,7 +829,8 @@ function TaskSubTabs({
           </div>
         ) : (
           visibleItems.map(r => {
-            const isOverdue = new Date(r.dueDate) < new Date() && !r.isDone;
+            const todayStr = new Date().toISOString().split("T")[0];
+            const isOverdue = r.dueDate < todayStr && !r.isDone;
             const isFinancial = r.type === "payment";
             return (
               <div
@@ -2588,7 +2589,8 @@ export default function ClientDetail() {
               <div className="rounded-2xl p-6" style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)" }}>
                 {(() => {
                   const r = selectedReminder;
-                  const isOverdue = new Date(r.dueDate) < new Date() && !r.isDone;
+                  const todayStr = new Date().toISOString().split("T")[0];
+                  const isOverdue = r.dueDate < todayStr && !r.isDone;
                   const priorityColor: Record<string, string> = { high: "#f87171", medium: "#fbbf24", low: "#4ade80" };
                   const priorityLabel: Record<string, string> = { high: "Высокий", medium: "Средний", low: "Низкий" };
                   const typeLabel: Record<string, string> = { report: "Отчёт", payment: "Оплата", renewal: "Продление", task: "Задача", general: "Общее" };

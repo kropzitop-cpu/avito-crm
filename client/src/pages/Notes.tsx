@@ -52,6 +52,7 @@ type Note = {
   color: string;
   tags: string; // JSON
   isPinned: boolean;
+  folderId: number | null;
   posX: number;
   posY: number;
   createdAt: string;
@@ -82,7 +83,9 @@ function StickerCard({
   return (
     <div
       onClick={onOpen}
-      className="relative flex flex-col rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-xl group"
+      draggable
+      onDragStart={e => { e.dataTransfer.setData("noteId", String(note.id)); e.dataTransfer.effectAllowed = "move"; }}
+      className="relative flex flex-col rounded-2xl p-4 cursor-grab active:cursor-grabbing transition-all duration-200 hover:scale-[1.02] hover:shadow-xl group"
       style={{
         background: note.color,
         border: `1.5px solid ${border}`,
@@ -361,6 +364,7 @@ export default function Notes() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderColor, setNewFolderColor] = useState("#7c6bff");
+  const [dragOverFolder, setDragOverFolder] = useState<number | null | "all" | "none">(null);
 
   const { data: rawNotes = [] } = useQuery<Note[]>({ queryKey: ["/api/notes"], throwOnError: false });
   const { data: folders = [] } = useQuery<NoteFolder[]>({ queryKey: ["/api/note-folders"], throwOnError: false });
@@ -415,6 +419,18 @@ export default function Notes() {
     createMutation.mutate({ title: "Новая заметка", content: "", color: "#1e2235", tags: "[]", isPinned: false, folderId } as any);
   };
 
+  const handleDropOnFolder = (e: React.DragEvent, targetFolderId: number | null) => {
+    e.preventDefault();
+    setDragOverFolder(null);
+    const noteId = parseInt(e.dataTransfer.getData("noteId"));
+    if (!noteId) return;
+    const note = rawNotes.find(n => n.id === noteId);
+    if (!note) return;
+    if (note.folderId === targetFolderId) return; // already there
+    updateMutation.mutate({ id: noteId, data: { folderId: targetFolderId } });
+    toast({ title: targetFolderId === null ? "Заметка убрана из папки" : "Заметка перемещена в папку" });
+  };
+
   const handleSave = useCallback((data: Partial<Note>) => {
     if (!activeNote) return;
     updateMutation.mutate({ id: activeNote.id, data });
@@ -456,24 +472,37 @@ export default function Notes() {
 
         <div className="flex-1 overflow-y-auto py-2">
           {/* Все заметки */}
-          {[
-            { id: "all" as const, name: "Все заметки", color: "#a78bfa", count: rawNotes.length },
-            { id: null as const, name: "Без папки", color: "#475569", count: rawNotes.filter(n => n.folderId == null).length },
-          ].map(item => (
-            <button
-              key={String(item.id)}
-              onClick={() => setSelectedFolderId(item.id)}
-              className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5"
-              style={{
-                background: selectedFolderId === item.id ? "rgba(124,107,255,0.1)" : "transparent",
-                borderLeft: selectedFolderId === item.id ? "2px solid #7c6bff" : "2px solid transparent",
-              }}
-            >
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
-              <span className="text-xs flex-1 truncate" style={{ color: selectedFolderId === item.id ? "#e2e8f0" : "#94a3b8" }}>{item.name}</span>
-              <span className="text-xs" style={{ color: "#334155" }}>{item.count}</span>
-            </button>
-          ))}
+          <button
+            onClick={() => setSelectedFolderId("all")}
+            className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5"
+            style={{
+              background: selectedFolderId === "all" ? "rgba(124,107,255,0.1)" : "transparent",
+              borderLeft: selectedFolderId === "all" ? "2px solid #7c6bff" : "2px solid transparent",
+            }}
+          >
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: "#a78bfa" }} />
+            <span className="text-xs flex-1 truncate" style={{ color: selectedFolderId === "all" ? "#e2e8f0" : "#94a3b8" }}>Все заметки</span>
+            <span className="text-xs" style={{ color: "#334155" }}>{rawNotes.length}</span>
+          </button>
+
+          {/* Без папки — дроп-зона */}
+          <div
+            onClick={() => setSelectedFolderId(null)}
+            onDragOver={e => { e.preventDefault(); setDragOverFolder("none"); }}
+            onDragLeave={() => setDragOverFolder(null)}
+            onDrop={e => handleDropOnFolder(e, null)}
+            className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5 cursor-pointer"
+            style={{
+              background: dragOverFolder === "none" ? "rgba(71,85,105,0.25)" : selectedFolderId === null ? "rgba(124,107,255,0.1)" : "transparent",
+              borderLeft: selectedFolderId === null ? "2px solid #475569" : dragOverFolder === "none" ? "2px solid #475569" : "2px solid transparent",
+              outline: dragOverFolder === "none" ? "1.5px dashed #475569" : "none",
+              borderRadius: dragOverFolder === "none" ? 8 : 0,
+            }}
+          >
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: "#475569" }} />
+            <span className="text-xs flex-1 truncate" style={{ color: selectedFolderId === null ? "#e2e8f0" : "#94a3b8" }}>Без папки</span>
+            <span className="text-xs" style={{ color: "#334155" }}>{rawNotes.filter(n => n.folderId == null).length}</span>
+          </div>
 
           {/* Разделитель */}
           {folders.length > 0 && <div className="mx-4 my-2 border-t" style={{ borderColor: "#1e2235" }} />}
@@ -482,18 +511,24 @@ export default function Notes() {
           {folders.map(folder => {
             const count = rawNotes.filter(n => n.folderId === folder.id).length;
             const isActive = selectedFolderId === folder.id;
+            const isDragOver = dragOverFolder === folder.id;
             return (
-              <button
+              <div
                 key={folder.id}
                 onClick={() => setSelectedFolderId(folder.id)}
-                className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5 group"
+                onDragOver={e => { e.preventDefault(); setDragOverFolder(folder.id); }}
+                onDragLeave={() => setDragOverFolder(null)}
+                onDrop={e => handleDropOnFolder(e, folder.id)}
+                className="w-full text-left px-4 py-2 flex items-center gap-2.5 transition-colors hover:bg-white/5 cursor-pointer group"
                 style={{
-                  background: isActive ? "rgba(124,107,255,0.1)" : "transparent",
-                  borderLeft: isActive ? `2px solid ${folder.color}` : "2px solid transparent",
+                  background: isDragOver ? `${folder.color}20` : isActive ? "rgba(124,107,255,0.1)" : "transparent",
+                  borderLeft: isActive ? `2px solid ${folder.color}` : isDragOver ? `2px solid ${folder.color}` : "2px solid transparent",
+                  outline: isDragOver ? `1.5px dashed ${folder.color}` : "none",
+                  borderRadius: isDragOver ? 8 : 0,
                 }}
               >
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: folder.color }} />
-                <span className="text-xs flex-1 truncate" style={{ color: isActive ? "#e2e8f0" : "#94a3b8" }}>{folder.name}</span>
+                <span className="text-xs flex-1 truncate" style={{ color: isActive || isDragOver ? "#e2e8f0" : "#94a3b8" }}>{folder.name}</span>
                 <span className="text-xs" style={{ color: "#334155" }}>{count}</span>
                 <button
                   onClick={e => { e.stopPropagation(); deleteFolderMutation.mutate(folder.id); }}
@@ -502,7 +537,7 @@ export default function Notes() {
                 >
                   <X size={10} />
                 </button>
-              </button>
+              </div>
             );
           })}
         </div>
